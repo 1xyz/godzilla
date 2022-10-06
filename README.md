@@ -31,3 +31,5 @@ Response code:
 5 = REFUSED (e.g., refused zone transfer requests)
 
 ```
+
+[DNSKEY resource records](https://docs.infoblox.com/space/NAG8/22252224/DNSKEY+Resource+Records)
