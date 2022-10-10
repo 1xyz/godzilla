@@ -11,6 +11,8 @@ const (
 	DefaulTimeout   = 2 * time.Second
 	GoogleDNSServer = "8.8.8.8:53"
 	CloudDNSServer  = "1.1.1.1:53"
+	gTLDDNSServer   = "m.gtld-servers.net:53"
+	m_gTLDDNServer  = "192.55.83.30:53"
 )
 
 type DnsQuery struct {
@@ -119,6 +121,9 @@ func printMessage(m *dns.Msg) {
 			fmt.Printf("NS: %v\n", v.Ns)
 		case *dns.DNSKEY:
 			fmt.Printf("DNSKEY: %v\n", v.String())
+		case *dns.DS:
+			fmt.Printf("DS: keytag: %v algo: %v digest: %v, digest-type: %v\n",
+				v.KeyTag, v.Algorithm, v.Digest, v.DigestType)
 		default:
 			fmt.Printf("I don't know about type %T!\n", v)
 		}
@@ -273,6 +278,54 @@ func verifiedQuery() {
 	}
 
 	log.Printf("all verified")
+
+	// lets dump the zsk and ksk
+	// zsk.D
+
+	// note this can be a non-recursive query if you query a gTLD server
+	dsRecordQuery := NewDnsQueryReq(query,
+		dnsNameserver, dns.TypeDS, true, true)
+	dsRecordResponse, err := dsRecordQuery.Execute()
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	var dsRecord *dns.DS = nil
+	for _, entry := range dsRecordResponse.Answer {
+		hdr := entry.Header()
+		if hdr.Rrtype != dns.TypeDS {
+			continue
+		}
+		dsRecordEntry, ok := entry.(*dns.DS)
+		if !ok {
+			log.Printf("typecast failed to *dns.DS\n %T", entry)
+			continue
+		}
+		dsRecord = dsRecordEntry
+	}
+
+	if dsRecord == nil {
+		log.Fatalf("Did not expect to get a NIL dsRecord")
+	}
+
+	fmt.Printf("DS record = algo: %v, key:tag %v digest: %v digest-type: %v\n",
+		dsRecord.Algorithm, dsRecord.KeyTag, dsRecord.Digest, dsRecord.DigestType)
+
+	kskDs := ksk.ToDS(dsRecord.DigestType)
+	fmt.Printf("Hashed DS record = %v\n", kskDs.String())
+}
+
+func DsQuery() {
+	var dnsNameserver = gTLDDNSServer
+	var queryRecordType = dns.TypeDS
+	var query = "cloudflare.com."
+	recordQuery := NewDnsQueryReq(query,
+		dnsNameserver, queryRecordType, true, false)
+	recordResponse, err := recordQuery.Execute()
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	printMessage(recordResponse)
 }
 
 func simpleQuery() {
@@ -299,4 +352,5 @@ func simpleQuery() {
 
 func main() {
 	verifiedQuery()
+	DsQuery()
 }
